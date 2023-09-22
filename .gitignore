@@ -8,18 +8,11 @@ __pycache__/
 
 # IPython Notebook
 .ipynb_checkpoints
-*.ipynb
-!hmm-test.ipynb
 
 # Models
 !models/
 models/*
-!models/README.md
-!models/test/
+!models/hmm/
 
-# Data
-data/stress_dict.p
-data/syllable_dict.p
-
-# Scripts
-scripts/
+# Env
+.mise.toml
