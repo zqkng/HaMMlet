@@ -1,20 +1,47 @@
 ##############################################################################
 # tokenizer.py
 # -------------
-# Parses sonnet data (text file) into tokens for model training.
+# Parse and pre-process sonnet text data into tokens for model training.
 #
 ##############################################################################
 
-# Sonnets 99, 126, 145 removed due to format deviations.
-NUM_SHAKESPEARE_SONNETS = 151
+import collections
+
+
 # SONNET FORMAT:
 SONNET_LINES = 14
 NUM_QUATRAINS = 3
 QUATRAIN_LINES = 4
 COUPLET_LINES = 2
 
+# Shakespeare sonnets 99, 126, 145 removed due to format deviations
+EXCLUDED_SONNETS = ['99', '126', '145']
+
 PUNCTUATION = [',', ':', '.', ';', '?', '!', '(', ')', "'", '"']
-SONNET_FILEPATH = 'data/shakespeare.txt'
+RAW_DATA_FILES = ["data/shakespeare.txt", "data/spenser.txt"]
+
+
+def load_data(data_files=RAW_DATA_FILES):
+    """Read in raw text of sonnets as training data.
+
+    Parameters
+    ----------
+    data__files : list
+        List of file paths to sonnets training data files.
+
+    Returns
+    -------
+    data : list
+        Sonnet data (lines) read from file.
+
+    """
+    data = []
+    for filename in data_files:
+        with open(filename, 'r') as f:
+            for line in f:
+                if line is not None and line != '\n':
+                    data.append(line)
+    return data
 
 
 def tokenize_lpunc(line):
@@ -76,39 +103,36 @@ def tokenize_nopunc(line):
 
 
 # TRAINING SEQUENCES
-def sequence_each_line(tokenize, filename=SONNET_FILEPATH):
-    """Split sonnets into training sequences on a per-line basis.
+def sequence_each_line(tokenize, data):
+    """Parse and format sonnets into training sequences on a per-line basis.
 
     Parameters
     ----------
     tokenizer : function
         Function that parses sonnet lines into tokens.
-    filename : str
-        File path to the sonnets text file.
+    data : list
+        Sonnet data (lines) read from file.
 
     Returns
     -------
-    lines : list
+    sequences : list
         List of training sequences, where each sequence is
         a tokenized sonnet line.
 
     """
-    data = _load_raw_text(filename)
-    lines = []
-    cursor = 0
+    sequences = []
 
-    for sonnet in range(NUM_SHAKESPEARE_SONNETS):
-        # Skip first line (which is a number).
-        cursor += 1
-        for i in range(SONNET_LINES):
-            lines.append(tokenize(data[cursor]))
-            cursor += 1
+    for line in data:
+        parsed_line = tokenize(line)
+        # Skip first line (which is just the sonnet number)
+        if len(parsed_line) > 1:
+            sequences.append(parsed_line)
 
-    return lines
+    return sequences
 
 
-def sequence_quatrains_couplets(tokenize, filename=SONNET_FILEPATH):
-    """Split sonnets into training sequences as sets of quatrains and couplets.
+def sequence_quatrains_couplets(tokenize, data):
+    """Parse and format sonnets into training sequences as sets of quatrains and couplets.
 
     Sonnets are split into quatrains and couplets, and then quatrains and
     couplets are split on a per-line basis.
@@ -117,8 +141,8 @@ def sequence_quatrains_couplets(tokenize, filename=SONNET_FILEPATH):
     ----------
     tokenizer : function
         Function that parses sonnet lines into tokens.
-    filename : str
-        File path to the sonnets text file.
+    data : list
+        Sonnet data (lines) read from file.
 
     Returns
     -------
@@ -128,32 +152,33 @@ def sequence_quatrains_couplets(tokenize, filename=SONNET_FILEPATH):
         Training sequences of all lines from couplets.
 
     """
-    data = _load_raw_text(filename)
     quatrains = []
     couplets = []
-    cursor = 0
-
-    for sonnet in range(NUM_SHAKESPEARE_SONNETS):
-        cursor += 1
-        for quatrain in range(NUM_QUATRAINS):
-            for line in range(QUATRAIN_LINES):
-                quatrains.append(tokenize(data[cursor]))
-                cursor += 1
-        for line in range(COUPLET_LINES):
-            couplets.append(tokenize(data[cursor]))
-            cursor += 1
+    lines = iter(data)
+    line = next(lines, None)
+    
+    while line is not None:
+        sonnet_line = tokenize(line)    # First line is the sonnet number
+        if len(sonnet_line) == 1 and sonnet_line not in EXCLUDED_SONNETS:
+            for i in range(NUM_QUATRAINS * QUATRAIN_LINES):
+                line = next(lines, None)
+                if line: quatrains.append(tokenize(line))
+            for i in range(COUPLET_LINES):
+                line = next(lines, None)
+                if line: couplets.append(tokenize(line))
+        line = next(lines, None)
 
     return quatrains, couplets
 
 
 # MISCELLANEOUS SONNET PROCESSING
-def process_rhymes(filename=SONNET_FILEPATH):
+def process_rhymes(data):
     """Compile lists of rhyming pairs from the sonnets text.
 
     Parameters
     ----------
-    filename : str
-        File path to the sonnets text file.
+    data : list
+        Sonnet data (lines) read from file.
 
     Returns
     -------
@@ -163,79 +188,53 @@ def process_rhymes(filename=SONNET_FILEPATH):
         Pairs of rhyming lines (in tuples) from all the couplets.
 
     """
-    data = _load_raw_text(filename)
     quatrain_rhymes = []
     couplet_rhymes = []
-    cursor = 0
+    lines = iter(data)
+    line = next(lines, None)
+    
+    while line is not None:
+        sonnet_line = tokenize_nopunc(line) # First line is the sonnet number
+        if len(sonnet_line) == 1 and sonnet_line not in EXCLUDED_SONNETS:
+            for i in range(NUM_QUATRAINS):
+                quatrain = []
+                for j in range(QUATRAIN_LINES):
+                    line = next(lines, None)
+                    if line: quatrain.append(tokenize_nopunc(line))
+                quatrain_rhymes.append((quatrain[0][-1], quatrain[2][-1]))
+                quatrain_rhymes.append((quatrain[1][-1], quatrain[3][-1]))
 
-    for sonnet in range(NUM_SHAKESPEARE_SONNETS):
-        cursor += 1
-        for quatrain in range(NUM_QUATRAINS):
-            line0 = tokenize_lpunc(data[cursor])
-            line1 = tokenize_lpunc(data[cursor + 1])
-            line2 = tokenize_lpunc(data[cursor + 2])
-            line3 = tokenize_lpunc(data[cursor + 3])
-            quatrain_rhymes.append((line0[-1], line2[-1]))
-            quatrain_rhymes.append((line1[-1], line3[-1]))
-            cursor += 4
-
-        line0 = tokenize_lpunc(data[cursor])
-        line1 = tokenize_lpunc(data[cursor + 1])
-        couplet_rhymes.append((line0[-1], line1[-1]))
-        cursor += 2
+            couplet = []
+            for i in range(COUPLET_LINES):
+                line = next(lines, None)
+                if line: couplet.append(tokenize_nopunc(line))
+            couplet_rhymes.append((couplet[-1], couplet[-1]))
+        line = next(lines, None)
 
     return quatrain_rhymes, couplet_rhymes
 
 
-def process_word_frequency(filename=SONNET_FILEPATH):
+def process_word_frequency(data):
     """Count frequency of words in all sonnets.
 
     Parameters
     ----------
-    filename : str
-        File path to the sonnets text file.
+    data : list
+        Sonnet data (lines) read from file.
 
     Returns
     -------
     word_count : dict
-        Mapping of words to freqeuncy count.
+        Mapping of words to frequency count.
 
     """
-    data = _load_raw_text(filename)
-    word_count = {}
-    cursor = 0
+    word_count = collections.Counter()
 
-    for sonnet in range(NUM_SHAKESPEARE_SONNETS):
-        cursor += 1
-        for i in range(SONNET_LINES):
-            words = tokenize_lpunc(data[cursor])
-            for word in words:
-                if word_count.get(word) is not None:
-                    word_count[word] += 1
-                else:
-                    word_count[word] = 1
-            cursor += 1
+    for line in data:
+        words = tokenize_nopunc(line)
+        if len(words) > 1:
+            word_count.update(words)
 
-    return word_count
+    return dict(word_count)
 
 
-def _load_raw_text(filename=SONNET_FILEPATH):
-    """Read in raw text of Shakespeare sonnets.
-
-    Parameters
-    ----------
-    filename : str
-        File path to the sonnets text file.
-
-    Returns
-    -------
-    data : list
-        Sonnet data (lines) read from file.
-
-    """
-    data = []
-    with open(filename, 'r') as fp:
-        for line in fp:
-            if line is not None and line != '\n':
-                data.append(line)
-    return data
