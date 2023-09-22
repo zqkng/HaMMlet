@@ -6,7 +6,11 @@
 #
 ##############################################################################
 
+import os
+import pickle
 import numpy as np
+
+MODEL_DIRNAME = "models/hmm"
 
 
 class HiddenMarkovModel:
@@ -72,7 +76,7 @@ class HiddenMarkovModel:
         """
         X = self.transform_observations(data)
 
-        # Initialize matrices randomly.
+        # Initialize matrices randomly
         self.PI = self.normalize(np.random.rand(self.num_states))
         self.A = self.normalize(np.random.rand(self.num_states, self.num_states))
         self.B = self.normalize(np.random.rand(self.num_states, self.num_obs))
@@ -92,7 +96,7 @@ class HiddenMarkovModel:
             # Stopping Conditions
             if (len(norms) > 1 and norms[-1] / norms[0] < epsilon or
                     iterations > max_iter):
-                print('Number of Iterations: {}'.format(iterations))
+                print(f"Number of Iterations: {iterations}")
                 break
 
         return self.A, self.B, self.PI, self.token_dict
@@ -346,11 +350,11 @@ class HiddenMarkovModel:
         A = self._update_transition_probs(X, gammas, xis)
         B = self._update_emission_probs(X, gammas)
 
-        # Calculate Frobenius norm (for A and B) and L2 norm (for PI).
+        # Calculate Frobenius norm (for A and B) and L2 norm (for PI)
         norm = (np.linalg.norm(self.A - A) + np.linalg.norm(self.B - B) +
                 np.linalg.norm(self.PI - PI))
 
-        # Update matrices.
+        # Update matrices
         self.PI = PI
         self.A = A
         self.B = B
@@ -380,10 +384,10 @@ class HiddenMarkovModel:
             prob_sum = 0
             for i in range(len(X)):
                 prob_sum += gammas[i][0, state]
-            # State distribution probability is the average across all sequences.
+            # State distribution probability is the average across all sequences
             PI[state] = prob_sum / len(X)
 
-        # Check that probabilities sum to 1.
+        # Check that probabilities sum to 1
         np.testing.assert_allclose(PI.sum(), 1)
         return PI
 
@@ -413,13 +417,13 @@ class HiddenMarkovModel:
             for next_state in range(self.num_states):
                 numerator, denominator = 0, 0
                 for j in range(len(X)):
-                    # Skip last index in sequence (because no next state).
+                    # Skip last index in sequence (because no next state)
                     for i in range(len(X[j]) - 1):
                         numerator += xis[j][i, prev_state, next_state]
                         denominator += gammas[j][i, prev_state]
                 A[prev_state, next_state] = numerator / denominator
 
-            # Check that probabilities sum to 1.
+            # Check that probabilities sum to 1
             # np.testing.assert_allclose(A[prev_state].sum(), 1)
 
         return A
@@ -446,12 +450,116 @@ class HiddenMarkovModel:
                 for j in range(len(X)):
                     for i in range(len(X[j])):
                         probability = gammas[j][i, state]
-                        if X[j][i] == token:  # Indicator function.
+                        if X[j][i] == token:  # Indicator function
                             numerator += probability
                         denominator += probability
                 B[state, token] = numerator / denominator
 
-            # Check that probabilities sum to 1.
+            # Check that probabilities sum to 1
             # np.testing.assert_allclose(B[state].sum(), 1)
 
         return B
+
+
+def train_hmm_model(model_name, data, num_states,
+              epsilon=0.01, max_iter=100, scale=True):
+    """Wrapper function to train HMM and then save resulting model parameters.
+
+    Parameters
+    ----------
+    model_name : str
+        Model name for saving the resulting HMM to file.
+    data : list
+        Training sequences (observation data).
+    num_states : int
+        Number of states to have in the model.
+    epsilon : float
+        Value to calculate the stopping condition for algorithm
+        to converge (when ratio between updated norm and initial
+        norm is less than epsilon).
+    max_iter : int
+        Maximum number of iterations that the algorithm should run.
+        (Set max_iter=0 for indefinite number of iterations.)
+    scale : bool
+        Indicates whether to normalize probability vectors.
+
+    """
+    hmm_model = HiddenMarkovModel(num_states)
+    A, B, PI, token_dict = hmm_model.train(data)
+    save_hmm_model(model_name, A, B, PI, token_dict)
+
+
+def save_hmm_model(model_name, A, B, PI, token_dict):
+    """Save HMM parameters as specified model name.
+
+    Parameters
+    ----------
+    model_name : str
+        Model name for saving the resulting HMM to file.
+    A : numpy.array
+        Transition proability matrix of HMM.
+    B : numpy.array
+        Emission probability matrix of HMM.
+    PI : numpy.array
+        Initial state distribution vector of HMM.
+    token_dict : dict
+        Mapping from tokens to observation indices (int).
+
+    """
+    try:
+        model_dirpath = os.path.join(MODEL_DIRNAME, model_name)
+        os.mkdir(model_dirpath)
+    except FileExistsError:
+        print("Directory for model already exists; model will be overwritten.")
+    finally:
+        model_filepath = os.path.join(model_dirpath, model_name)
+        with open(f"{model_filepath}_TRANSITION.p", 'wb') as fp:
+            pickle.dump(A, fp)
+
+        with open(f"{model_filepath}_EMISSION.p", 'wb') as fp:
+            pickle.dump(B, fp)
+
+        with open(f"{model_filepath}_INIT.p", 'wb') as fp:
+            pickle.dump(PI, fp)
+
+        with open(f"{model_filepath}_TOKENS.p", 'wb') as fp:
+            pickle.dump(token_dict, fp)
+
+
+def load_hmm_model(model_name):
+    """Load HMM with given model name.
+
+    Parameters
+    ----------
+    model_name : str
+        Name of model to load from file.
+
+    Returns
+    -------
+    A : numpy.array
+        Transition proability matrix of HMM.
+    B : numpy.array
+        Emission probability matrix of HMM.
+    PI : numpy.array
+        Initial state distribution vector of HMM.
+    token_dict : dict
+        Mapping from tokens to observation indices (int).
+
+    """
+    A, B, PI, token_dict = None, None, None, None
+    model_filepath = os.path.join(MODEL_DIRNAME, model_name, model_name)
+
+    with open(f"{model_filepath}_TRANSITION.p", 'rb') as fp:
+        A = pickle.load(fp)
+
+    with open(f"{model_filepath}_EMISSION.p", 'rb') as fp:
+        B = pickle.load(fp)
+
+    with open(f"{model_filepath}_INIT.p", 'rb') as fp:
+        PI = pickle.load(fp)
+
+    with open(f"{model_filepath}_TOKENS.p", 'rb') as fp:
+        token_dict = pickle.load(fp)
+
+    return A, B, PI, token_dict
+
