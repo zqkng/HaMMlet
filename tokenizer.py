@@ -197,10 +197,10 @@ def sequence_full_sonnet(tokenize, data):
         else:
             sonnets[count].append(sequence)
 
-	for i in sonnets:
-    	sonnets[i] = [' '.join(line) for line in sonnets[i]]
+    for i in sonnets:
+        sonnets[i] = [' '.join(line) for line in sonnets[i]]
 
-	return [' '.join(sonnets[line]) for line in sonnets]
+    return [' '.join(sonnets[line]) for line in sonnets]
 
 
 # MISCELLANEOUS SONNET PROCESSING
