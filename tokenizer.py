@@ -171,6 +171,38 @@ def sequence_quatrains_couplets(tokenize, data):
     return quatrains, couplets
 
 
+def sequence_full_sonnet(tokenize, data):
+    """Parse and format each sonnet (full text) into a training sequence.
+
+    Parameters
+    ----------
+    tokenizer : function
+        Function that parses sonnet lines into tokens.
+    data : list
+        Sonnet data (lines) read from file.
+
+    Returns
+    -------
+    sequences : list
+        List of training sequences, where each sequence is
+        a pre-processed sonnet string.
+    """
+    sonnets = collections.defaultdict(list)
+    count = 0
+
+    for line in data:
+        sequence = tokenize(line)
+        if len(sequence) == 1:
+            count += 1
+        else:
+            sonnets[count].append(sequence)
+
+	for i in sonnets:
+    	sonnets[i] = [' '.join(line) for line in sonnets[i]]
+
+	return [' '.join(sonnets[line]) for line in sonnets]
+
+
 # MISCELLANEOUS SONNET PROCESSING
 def process_rhymes(data):
     """Compile lists of rhyming pairs from the sonnets text.
