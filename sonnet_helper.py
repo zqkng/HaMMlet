@@ -20,9 +20,9 @@ def fix_sentence_mechanics(line):
     words[0] = words[0].capitalize()
 
     # Capitalize the word 'I'.
-    for i in range(len(words)):
-        if words[i] == 'i':
-            words[i] = 'I'
+    for i, w in enumerate(words):
+        if w == 'i' or w == 'o':
+            words[i] = w.upper()
 
     # Capitalize the first word of sentences.
     for i in range(len(words) - 1, 0, -1):

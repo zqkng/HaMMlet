@@ -12,7 +12,6 @@ import pickle
 import numpy as np
 from keras.models import Sequential, load_model
 from keras.layers import Dense, LSTM, Lambda, Dropout
-from keras.preprocessing.sequence import pad_sequences
 from keras.utils import to_categorical
 
 import tokenizer
@@ -97,6 +96,5 @@ def build_lambda_model(model, temperature, X, char2vec):
     lambda_model.layers[2].set_weights(model_weights[1])
 
     return lambda_model
-
 
 
