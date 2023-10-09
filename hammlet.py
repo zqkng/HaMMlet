@@ -26,16 +26,16 @@ def generate_rnn_sonnet(model, seed, temperature=None):
     Parameters
     ----------
     model : str
-        Name of model 
+        Name of model.
     seed : str
-        Initial line for sonnet generation
+        Initial line for sonnet generation.
     temperature : float
-        Hyperparamter to control randomness of predictions
+        Hyperparamter to control randomness of predictions.
  
     Returns
     -------
     poem : str
-        Sonnet text
+        Sonnet text.
     """
     char_sequences, char2vec = rnn.load_rnn_data()
     X, Y = rnn.generate_training_data(char_sequences, char2vec)
@@ -95,14 +95,14 @@ def generate_hmm_sonnet(model, rhyme=False):
     Parameters
     ----------
     model : str
-        Name of model 
+        Name of model.
     rhyme : bool
-        Boolean value to enable/disable rhyming scheme
+        Flag to enable or disable rhyming scheme.
  
     Returns
     -------
     poem : str
-        Sonnet text (with either iambic pentameter or rhyming)
+        Sonnet text (with either iambic pentameter or rhyming).
 
     """
     if rhyme:
