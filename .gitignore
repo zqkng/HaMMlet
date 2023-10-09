@@ -13,6 +13,7 @@ __pycache__/
 !models/
 models/*
 !models/hmm/
+!models/rnn/
 
 # Env
 .mise.toml
