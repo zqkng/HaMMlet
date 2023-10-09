@@ -7,6 +7,7 @@
 
 import re
 import numpy as np
+from keras.utils import to_categorical
 from keras.preprocessing.sequence import pad_sequences
 
 import hmm
@@ -18,14 +19,15 @@ import tokenizer
 SONNET_LINES = 14
 # Maximum character count per sonnet
 MAX_CHARACTERS = 800
+# Seed line for RNN generation
+DEFAULT_SEED = "my mistress' eyes are nothing like the sun,"
 
-
-def generate_rnn_sonnet(model, seed, temperature=None):
+def generate_rnn_sonnet(model_name, seed=DEFAULT_SEED, temperature=None):
     """Generate a Shakespearean-like sonnet using the given RNN model.
 
     Parameters
     ----------
-    model : str
+    model_name : str
         Name of model.
     seed : str
         Initial line for sonnet generation.
@@ -43,7 +45,7 @@ def generate_rnn_sonnet(model, seed, temperature=None):
     if temperature:
         model = rnn.add_lambda_layer(model, char2vec, X, temperature)
 
-    return _get_rnn_poem(model, char2vec, X, seed)
+    return _gen_rnn_poem(model, char2vec, X, seed)
 
 
 def _gen_rnn_poem(model, char2vec, X, seed, max_char=MAX_CHARACTERS):
@@ -53,12 +55,12 @@ def _gen_rnn_poem(model, char2vec, X, seed, max_char=MAX_CHARACTERS):
         X_test = pad_sequences([X_test], maxlen=X.shape[1])
         X_test = to_categorical(X_test, num_classes=len(char2vec))
         # Select class with highest probability
-        Y_next = np.argmax(model.predict(X_test), axis =-1)
- 
+        Y_pred = np.argmax(model.predict(X_test, verbose=0), axis=1)
+
         # Map vec2char
         for c, i in char2vec.items():
-            if i == Y_next[0]:
-                seed.append(c)
+            if i == Y_pred[0]:
+                seed += c
                 break
 
     # Generate sonnet lines
@@ -80,7 +82,7 @@ def _gen_rnn_poem(model, char2vec, X, seed, max_char=MAX_CHARACTERS):
     return ''.join(poem[:14])
  
 
-def generate_hmm_sonnet(model, rhyme=False):
+def generate_hmm_sonnet(model_name, rhyme=False):
     """Generate a Shakespearean-like sonnet using the given hidden Markov model.
     
     If `rhyme := True`, then only reversed models trained on all sonnet lines
@@ -94,7 +96,7 @@ def generate_hmm_sonnet(model, rhyme=False):
 
     Parameters
     ----------
-    model : str
+    model_name : str
         Name of model.
     rhyme : bool
         Flag to enable or disable rhyming scheme.
@@ -106,12 +108,12 @@ def generate_hmm_sonnet(model, rhyme=False):
 
     """
     if rhyme:
-        A, B, PI, token_to_index = hmm.load_hmm_model(f"{model}")
+        A, B, PI, token_to_index = hmm.load_hmm_model(f"{model_name}")
         index_to_token = {index: token for token, index in token_to_index.items()}
         sonnet = _gen_sonnet_rhyme(A, B, token_to_index, index_to_token)
     else:
-        q_A, q_B, q_PI, q_tokens = hmm.load_hmm_model(f"q-{model}")
-        c_A, c_B, c_PI, c_tokens = hmm.load_hmm_model(f"c-{model}")
+        q_A, q_B, q_PI, q_tokens = hmm.load_hmm_model(f"q-{model_name}")
+        c_A, c_B, c_PI, c_tokens = hmm.load_hmm_model(f"c-{model_name}")
         sonnet = _gen_sonnet(q_A, q_B, q_PI, q_tokens, c_A, c_B, c_PI, c_tokens)
 
     return sonnet
