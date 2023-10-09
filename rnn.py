@@ -6,7 +6,7 @@
 ###############################################################################
 
 import os
-os.environ["KERAS_BACKEND"] = "torch"
+import pickle
 
 import numpy as np
 from keras.models import Sequential, load_model
@@ -16,10 +16,11 @@ from keras.utils import to_categorical
 import tokenizer
 
 MODEL_DIRNAME = "models/rnn"
+DATA_DIRNAME = "data"
 
 # Parameters for processing training sequences:
 MAX_SEQUENCE_LENGTH = 40    # Avg. number of chars per sonnet line is ~40
-STEP_SIZE = 3
+STEP_SIZE = 1
 # Parameters for building and training model:
 HIDDEN_SIZE = 600
 DROPOUT_PERCENTAGE = 0.2
@@ -45,6 +46,11 @@ def load_rnn_data():
     char_sequences = []
     for seq in sequences:
         char_sequences.append([char2vec[c] for c in seq])
+
+    with open(f"{DATA_DIRNAME}/character_sequences.p", "wb") as f1:
+        pickle.dump(char_sequences, f1)
+    with open(f"{DATA_DIRNAME}/char2vec.p", "wb") as f2:
+        pickle.dump(char2vec, f2)
 
     return char_sequences, char2vec
     
@@ -141,7 +147,7 @@ def add_lambda_layer(model, char2vec, X, temperature):
     model_weights = [layer.get_weights() for layer in model.layers]
     # Add Lambda layer between LSTM and Dense
     lambda_model = Sequential([
-        LSTM(HIDDEN_SIZE, input_shape(X.shape[1], X.shape[2]), return_sequences=True),
+        LSTM(HIDDEN_SIZE, input_shape=(X.shape[1], X.shape[2]), return_sequences=True),
         LSTM(HIDDEN_SIZE, return_sequences=True),
         LSTM(HIDDEN_SIZE),
         Lambda(lambda x: x / temperature),
@@ -187,7 +193,7 @@ def train_rnn_model(X, Y, char2vec):
         LSTM(HIDDEN_SIZE, return_sequences=True),
         Dropout(DROPOUT_PERCENTAGE),
         LSTM(HIDDEN_SIZE),
-        Dropout(DROPOUT_PERCENTAGE)
+        Dropout(DROPOUT_PERCENTAGE),
         Dense(len(char2vec), activation='softmax')
     ])
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -201,7 +207,7 @@ def train_rnn_model(X, Y, char2vec):
 
 
 def save_rnn_model(model, layers, units, epochs):
-    """Save RNN model (Keras) as H5-based state file.
+    """Save RNN model (Keras) as HDF5 state file.
 
     Parameters
     ----------
@@ -223,7 +229,7 @@ def load_rnn_model(model_name):
     Parameters
     ----------
     model_name : str
-        Name of RNN model to load from H5-based state file.
+        Name of RNN model to load from HDF5 state file.
 
     Returns
     -------
