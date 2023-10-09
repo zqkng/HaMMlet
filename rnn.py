@@ -7,7 +7,6 @@
 
 import os
 os.environ["KERAS_BACKEND"] = "torch"
-import pickle
 
 import numpy as np
 from keras.models import Sequential, load_model
@@ -16,10 +15,14 @@ from keras.utils import to_categorical
 
 import tokenizer
 
-
 MODEL_DIRNAME = "models/rnn"
+
 MAX_SEQUENCE_LENGTH = 40
 STEP_SIZE = 1
+HIDDEN_SIZE = 600
+DROPOUT_PERCENTAGE = 0.2
+BATCH_SIZE = 128
+EPOCHS = 40
 
 
 def load_rnn_data():
@@ -61,16 +64,23 @@ def generate_training_data(char_sequences, char2vec):
 
 
 def train_rnn_model(X, Y, char2vec):
-    # Simple model: 1 LSTM layer of 200 units, 1 Dense layer with `softmax` activation
+    # RNN Model: 
+    #   - 3 LSTM layers of 600 units (each with 20% dropout)
+    #   - 1 Dense layer with `softmax` activation
     model = Sequential([
-        LSTM(200, input_shape(X.shape[1], X.shape[2])),
+        LSTM(HIDDEN_SIZE, input_shape(X.shape[1], X.shape[2]), return_sequences=True),
+        Dropout(DROPOUT_PERCENTAGE),
+        LSTM(HIDDEN_SIZE, return_sequences=True),
+        Dropout(DROPOUT_PERCENTAGE),
+        LSTM(HIDDEN_SIZE),
+        Dropout(DROPOUT_PERCENTAGE)
         Dense(len(char2vec), activation='softmax')
     ])
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     model.summary()
-    
-    model.fit(X, Y, batch_size=128, epochs=60)
-    save_rnn_model(model, 1, 200, 60)
+
+    model.fit(X, Y, batch_size=BATCH_SIZE, epochs=EPOCHS)
+    save_rnn_model(model, 3, hidden_size, epochs)    
 
 
 def save_rnn_model(model, layers, units, epochs):
@@ -81,19 +91,22 @@ def load_rnn_model(model_name):
     return load_model(f"{MODEL_DIRNAME}/{model_name}.h5")
 
 
-def build_lambda_model(model, temperature, X, char2vec):
+def add_lambda_layer(model, char2vec, X, temperature):
     model_weights = [layer.get_weights() for layer in model.layers]
     # Add Lambda layer between LSTM and Dense
     lambda_model = Sequential([
-        LSTM(200, input_shape=(X.shape[1], X.shape[2])),
+        LSTM(HIDDEN_SIZE, input_shape(X.shape[1], X.shape[2]), return_sequences=True),
+        LSTM(HIDDEN_SIZE, return_sequences=True),
+        LSTM(HIDDEN_SIZE),
         Lambda(lambda x: x / temperature),
         Dense(len(char2vec), activation='softmax')
     ])
     lambda_model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     
-    # Assign trained weights to new model
-    lambda_model.layers[0].set_weights(model_weights[0])
-    lambda_model.layers[2].set_weights(model_weights[1])
+    # Assign trained weights to new temperature model
+    for i in range(3):
+        lambda_model.layers[i].set_weights(model_weights[i*2])
+    lambda_model.layers[-1].set_weights(model_weights[-1])
 
     return lambda_model
 
