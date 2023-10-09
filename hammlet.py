@@ -5,7 +5,7 @@
 #   - Supports iambic pentameter or rhyming (though not both, as of yet).
 ##############################################################################
 
-import random
+import re
 import numpy as np
 from keras.preprocessing.sequence import pad_sequences
 
@@ -16,67 +16,69 @@ import tokenizer
 
 # Number of lines per sonnet
 SONNET_LINES = 14
-# Median sequence length is set to be 45 = 40 + 5
-# (+5 as buffer to get rid of additional chars at end)
-MEDIAN_SEQUENCE_LENGTH = 40 + 5
-TEMPERATURES = [1.5, 0.75, 0.25]
+# Maximum character count per sonnet
+MAX_CHARACTERS = 800
 
 
-def generate_sonnet(model_type, model_name, rhyme=False):
-    """Generate a Shakespearean-like sonnet.
+def generate_rnn_sonnet(model, seed, temperature=None):
+    """Generate a Shakespearean-like sonnet using the given RNN model.
 
     Parameters
     ----------
-    model_type : str
-        Type of model ('HMM' or 'RNN').
-    model_name : str
-        Filename of trained model.
-    rhyme : bool
-        Boolean value to enable/disable rhyming scheme (applies only to HMM models).
+    model : str
+        Name of model 
+    seed : str
+        Initial line for sonnet generation
+    temperature : float
+        Hyperparamter to control randomness of predictions
+ 
+    Returns
+    -------
+    poem : str
+        Sonnet text
     """
-    pass
-
-
-def generate_rnn_sonnet(model, seed):
     char_sequences, char2vec = rnn.load_rnn_data()
     X, Y = rnn.generate_training_data(char_sequences, char2vec)
-    # Randomly choose a sequence length
-    sequence_len = np.random.normal(MEDIAN_SEQUENCE_LENGTH, 5, size=SONNET_LINES)
-    sequence_len = [int(s) for s in sequence_len]
+    model = rnn.load_rnn_model(model_name)
+    if temperature:
+        model = rnn.add_lambda_layer(model, char2vec, X, temperature)
 
-    model = rnn.load_rnn_model("LSTM-1L-200U-60E")
-    temperature = TEMPERATURES[random.randint(0, 2)]
-    lambda_model = rnn.build_lambda_model(model, temperature, X, char2vec)
-
-    return _get_rnn_poem(seed, sequence_len, lambda_model, X, char2vec)
+    return _get_rnn_poem(model, char2vec, X, seed)
 
 
-def _gen_rnn_poem(seed, sequence_len, model, X, char2vec):
-    poem = [seed.capitalize()]
-    seed = list(seed)
+def _gen_rnn_poem(model, char2vec, X, seed, max_char=MAX_CHARACTERS):
+    # Generate `max_char` number of characters from seed
+    for _ in range(max_char):
+        X_test = [char2vec[c] for c in seed]
+        X_test = pad_sequences([X_test], maxlen=X.shape[1])
+        X_test = to_categorical(X_test, num_classes=len(char2vec))
+        # Select class with highest probability
+        Y_next = np.argmax(model.predict(X_test), axis =-1)
+ 
+        # Map vec2char
+        for c, i in char2vec.items():
+            if i == Y_next[0]:
+                seed.append(c)
+                break
 
-    for i in range(SONNET_LINES - 1):
-        line = []
-        for _ in range(sequence_len[i]):
-            X_test = [char2vec[ch] for ch in seed]
-            X_test = pad_sequences([X_test], maxlen=X.shape[1])
-            X_test = to_categorical(X_test, num_classes=len(char2vec))
-            # Select class with highest probability
-            Y_next = np.argmax(model.predict(X_test), axis =-1)
-            
-            # Map vec2char
-            for ch, j in char2vec.items():
-                if j == Y_next[0]:
-                    seed.append(ch)
-                    line.append(ch)
-                    break
-
-        # Remove the last word (since it may be incomplete)
-        seed = seed[:-1]
-        line = ' '.join(line[:-1])
-        poem.append(sh.fix_sentence_mechanics(line))
-
-    return poem
+    # Generate sonnet lines
+    poem = []
+    seed_tokens = re.split('(?<=[!?,.;:]) +', seed)
+    
+    for i, s in enumerate(seed_tokens):
+        if i == 0:
+            poem.append((f"{s}\n").capitalize())
+        else:
+            if len(poem[-1]) > 20:
+                if len(s) > 20:
+                    poem.append((f"{s}\n").capitalize())
+                else:
+                    poem.append((f"{s} ").capitalize())
+            else:
+                poem[-1] += (f"{s}\n")
+    
+    return ''.join(poem[:14])
+ 
 
 def generate_hmm_sonnet(model, rhyme=False):
     """Generate a Shakespearean-like sonnet using the given hidden Markov model.
@@ -94,11 +96,13 @@ def generate_hmm_sonnet(model, rhyme=False):
     ----------
     model : str
         Name of model 
-
+    rhyme : bool
+        Boolean value to enable/disable rhyming scheme
+ 
     Returns
     -------
     poem : str
-        Sonnet (with either iambic pentameter or rhyming)
+        Sonnet text (with either iambic pentameter or rhyming)
 
     """
     if rhyme:
