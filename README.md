@@ -77,9 +77,4 @@ hammlet.generate_rnn_sonnet("{model-name}", seed="{sonnet-line}", temperature={f
 	
 Examples of pre-existing trained models are located in: `models/hmm` and `models/rnn`.
 
----
 
-### TODO:
-
-- *Part-of-speech tagging for more reasonable sentence structure*
-- *Better rhyming implementation*
