@@ -9,11 +9,3 @@ __pycache__/
 # IPython Notebook
 .ipynb_checkpoints
 
-# Models
-!models/
-models/*
-!models/hmm/
-!models/rnn/
-
-# Env
-.mise.toml
